@@ -1,6 +1,9 @@
-obj-m=rk.o
-KERNEL=$(shell uname -r)
-PWD=$(shell pwd)
+obj-m += rkduck.o
+rkduck-objs = duck.o hijack.o misc.o
+
+KERNEL = $(shell uname -r)
+PWD = $(shell pwd)
+
 all: 
 	make -C /lib/modules/$(KERNEL)/build M=$(PWD) modules
 clean: 
