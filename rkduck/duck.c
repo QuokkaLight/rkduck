@@ -21,7 +21,7 @@ int duck_init(void) {
 
     backdoor();
 
-    persistence();
+    //persistence();
 
     return 0;
 }
