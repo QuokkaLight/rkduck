@@ -1,6 +1,7 @@
 #ifndef _DUCK_H_
 #define _DUCK_H_
 
+#include "backdoor.h"
 #include "common.h"
 #include "list.h"
 #include "misc.h"
