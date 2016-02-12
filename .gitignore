@@ -32,3 +32,8 @@
 *.dSYM/
 
 *.cmd
+rkduck/.tmp_versions/
+*Module.symvers
+*modules.order
+*rkduck.mod.c
+

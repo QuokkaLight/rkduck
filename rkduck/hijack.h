@@ -18,8 +18,8 @@
 #endif
 
 ptr_t find_syscall_table(void);
-int set_page_rw(ptr_t address);
-int set_page_ro(ptr_t address);
+// int set_page_rw(ptr_t address);
+// int set_page_ro(ptr_t address);
 
 extern asmlinkage ssize_t (*original_write)(int fd, const char __user *buff, ssize_t count);
 asmlinkage ssize_t duck_write(int fd, const char __user *buff, ssize_t count);

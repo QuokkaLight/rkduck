@@ -15,23 +15,23 @@ ptr_t find_syscall_table(void) {
     return NULL;
 }
 
-int set_page_rw(ptr_t address) {
-	unsigned int level;
-	pte_t *pte = lookup_address(address, &level);
+// int set_page_rw(ptr_t address) {
+// 	unsigned int level;
+// 	pte_t *pte = lookup_address(address, &level);
 
-	if (pte->pte &~ _PAGE_RW) {
-		pte->pte |= _PAGE_RW;
-	}
+// 	if (pte->pte &~ _PAGE_RW) {
+// 		pte->pte |= _PAGE_RW;
+// 	}
 
-	return 0;
-}
+// 	return 0;
+// }
 
-int set_page_ro(ptr_t address) {
-	unsigned int level;
-	pte_t *pte = lookup_address(address, &level);
-	pte->pte = pte->pte &~ _PAGE_RW;
-	return 0;
-}
+// int set_page_ro(ptr_t address) {
+// 	unsigned int level;
+// 	pte_t *pte = lookup_address(address, &level);
+// 	pte->pte = pte->pte &~ _PAGE_RW;
+// 	return 0;
+// }
 
 asmlinkage ssize_t duck_write(int fd, const char __user *buff, ssize_t count) {
 	int r = 0;
