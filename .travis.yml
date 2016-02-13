@@ -1,0 +1,13 @@
+language: c
+compiler:
+  - gcc
+env: BUILD_KERNEL=3.13.0-63-generic
+install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y linux-headers-3.13.0-63-generic cmake
+  - sudo ln -s /usr/src/3.13.0-63-generic /lib/modules/3.13.0-63-generic/build
+script:
+  - cd rkduck
+  - make
+sudo: 
+  - required
