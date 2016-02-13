@@ -15,5 +15,4 @@ struct hidden_file {
     struct list_head list;
 };
 
-
 #endif /* _LIST_H_ */

