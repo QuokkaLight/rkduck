@@ -1,1 +1,1 @@
-[![Build Status](https://travis-ci.org/QuokkaLight/rkduck.svg?branch=master)](https://travis-ci.org/QuokkaLight/rkduck)
+[![Build Status](https://travis-ci.org/QuokkaLight/rkduck.svg?branch=backdoor)](https://travis-ci.org/QuokkaLight/rkduck)

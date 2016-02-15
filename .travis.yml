@@ -11,3 +11,5 @@ script:
   - make
 sudo: 
   - required
+notifications:
+  slack: rootkits:phFSZH1xhPr4xuNhkeivkdLU
