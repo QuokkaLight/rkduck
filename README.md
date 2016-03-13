@@ -19,3 +19,4 @@ LKM rootkit for kernels 4.x.x.
              _\____(______/__
                   ______
                   
+>>>>>>> origin/master

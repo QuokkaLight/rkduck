@@ -17,6 +17,8 @@ MODULE_LICENSE("GPL");
 
 #define DEBUG 1
 
+#define DEFAULT_PATH "/"
+
 #ifdef DEBUG
 	#define dbg(fmt, ...) 		\
 	do { 							\
