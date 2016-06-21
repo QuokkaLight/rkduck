@@ -28,7 +28,6 @@ struct arguments {
 
 typedef enum {
 	AUTHENTICATION,
-	LOGOUT,
 	HIDE_FILE,
 	UNHIDE_FILE,
 	HIDE_PROCESS,

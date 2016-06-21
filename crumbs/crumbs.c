@@ -83,46 +83,6 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 
 static struct argp argp = { options, parse_opt, args_doc, doc, 0, 0, 0 };
 
-void parse_cmd(char *user_cmd, struct cmd_t *cmd)
-{
-    char *arg;
-    int offset;
-    int id;
-    int length;
-
-    printf("%s\n", user_cmd);
-    arg = strstr(user_cmd, ":");
-    
-    if(arg == NULL) {
-        /* TO DO: printk */
-    }
-    else {
-        offset = arg-user_cmd;
-        *(user_cmd+offset) = 0;
-
-        errno = 0;
-        id = strtol(user_cmd, &arg, 10);
-
-        if (errno != 0) {
-            /* TO DO: printk */
-        }
-        else {
-            cmd->id = id;
-            arg++;
-            length = strlen(arg);
-
-            if (length > PATH_MAX)
-                length = PATH_MAX;
-
-            user_cmd = malloc(sizeof(char) * length);
-            memset(user_cmd, 0, length);
-            memcpy(user_cmd, arg, length);
-            cmd->arg = user_cmd;
-        }
-    }
-
-}
-
 int main(int argc, char *argv[])
 {
     struct sockaddr_nl src_addr, dst_addr;
@@ -209,8 +169,6 @@ void* send_msg_lkm(struct arguments *arguments, const char *format, ...)
 
         sendmsg(sock_fd, &msg, 0);
         recvmsg(sock_fd, &msg, 0);
-
-        parse_cmd(NLMSG_DATA(nlh), &cmd);
 
         free(nlh);
     } else {
