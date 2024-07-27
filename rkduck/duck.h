@@ -14,6 +14,14 @@
 
 MODULE_LICENSE("GPL");
 
+#ifndef __NR_write 
+#define __NR_write 64
+#endif
+
+#ifndef __NR_kill
+#define __NR_kill 129
+#endif
+
 int duck_init(void);
 void duck_exit(void);
 module_init(duck_init);
